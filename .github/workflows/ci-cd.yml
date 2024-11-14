@@ -2,9 +2,9 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [ main ]
+    branches: [ aws ]
   pull_request:
-    branches: [ main ]
+    branches: [ aws ]
 
 jobs:
   build-and-test:
