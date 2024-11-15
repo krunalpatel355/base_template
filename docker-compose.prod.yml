@@ -8,17 +8,23 @@ services:
     environment:
       - FLASK_ENV=production
       - FLASK_APP=wsgi.py
+      - FLASK_DEBUG=1
+      - PYTHONUNBUFFERED=1
       - MONGO_HOST=${MONGO_HOST:-localhost}
       - MONGO_USER=${MONGO_USER:-}
       - MONGO_PASS=${MONGO_PASS:-}
       - MONGO_DB=${MONGO_DB:-flask_app}
+    command: >
+      gunicorn
+      --bind 0.0.0.0:5000
+      --workers 1
+      --threads 1
+      --timeout 120
+      --log-level debug
+      --access-logfile -
+      --error-logfile -
+      wsgi:app
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
     networks:
       - app-network
 

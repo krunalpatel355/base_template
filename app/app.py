@@ -1,22 +1,19 @@
-# app/app.py
+import logging
 from flask import Flask, jsonify
-from app.utils.mongo_utils import init_mongo
+
+logger = logging.getLogger(__name__)
 
 def create_app():
+    logger.debug("Initializing Flask application")
     app = Flask(__name__)
     
-    try:
-        app.db = init_mongo()
-    except Exception as e:
-        app.logger.error(f"Failed to initialize MongoDB: {e}")
-        app.db = None
-
+    @app.route('/')
+    def home():
+        return jsonify({"status": "ok", "message": "Flask app is running"})
+    
     @app.route('/health')
     def health_check():
-        health_status = {
-            'status': 'healthy',
-            'mongodb_connected': app.db is not None
-        }
-        return jsonify(health_status)
-
+        return jsonify({"status": "healthy"})
+    
+    logger.debug("Flask application initialized successfully")
     return app
