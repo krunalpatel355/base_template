@@ -1,33 +1,17 @@
+# docker-compose.prod.yml
 version: '3.8'
 
 services:
   web:
-    image: ${ECR_REGISTRY}/flask-app:${IMAGE_TAG}
+    build: 
+      context: .
+      dockerfile: Dockerfile
     ports:
       - "5000:5000"
     environment:
       - FLASK_ENV=production
-      - FLASK_APP=wsgi.py
-      - FLASK_DEBUG=1
-      - PYTHONUNBUFFERED=1
-      - MONGO_HOST=${MONGO_HOST:-localhost}
-      - MONGO_USER=${MONGO_USER:-}
-      - MONGO_PASS=${MONGO_PASS:-}
-      - MONGO_DB=${MONGO_DB:-flask_app}
-    command: >
-      gunicorn
-      --bind 0.0.0.0:5000
-      --workers 1
-      --threads 1
-      --timeout 120
-      --log-level debug
-      --access-logfile -
-      --error-logfile -
-      wsgi:app
+      - MONGO_HOST=${MONGO_HOST}
+      - MONGO_USER=${MONGO_USER}
+      - MONGO_PASS=${MONGO_PASS}
+      - MONGO_DB=${MONGO_DB}
     restart: unless-stopped
-    networks:
-      - app-network
-
-networks:
-  app-network:
-    driver: bridge

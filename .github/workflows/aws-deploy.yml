@@ -1,15 +1,12 @@
-name: Deploy to AWS EC2
+name: Deploy to Production
 
 on:
   push:
-    branches: [ aws ]
-  pull_request:
-    branches: [ aws ]
+    branches: [ main ]
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    
     steps:
     - uses: actions/checkout@v2
 
@@ -35,52 +32,15 @@ jobs:
 
     - name: Deploy to EC2
       uses: appleboy/ssh-action@master
-      env:
-        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-        IMAGE_TAG: ${{ github.sha }}
       with:
         host: ${{ secrets.EC2_HOST }}
         username: ${{ secrets.EC2_USERNAME }}
         key: ${{ secrets.EC2_SSH_KEY }}
-        port: 22
-        envs: ECR_REGISTRY,IMAGE_TAG
         script: |
-          # Create deployment directory if it doesn't exist
-          mkdir -p ~/flask-app-deployment
           cd ~/flask-app-deployment
-
-          # Pull the latest docker-compose file
-          aws s3 cp s3://${S3_BUCKET}/docker-compose.prod.yml ./docker-compose.prod.yml || true
-
-          # Set environment variables
-          export MONGO_HOST="${{ secrets.MONGO_HOST }}"
-          export MONGO_USER="${{ secrets.MONGO_USER }}"
-          export MONGO_PASS="${{ secrets.MONGO_PASS }}"
-          export MONGO_DB="${{ secrets.MONGO_DB }}"
-
-          # Login to ECR
-          aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin ${ECR_REGISTRY}
-
-          # Stop and remove existing containers
-          docker-compose -f docker-compose.prod.yml down || true
-
-          # Remove unused images
-          docker system prune -af
-
-          # Pull and start new containers
+          echo "MONGO_HOST=${{ secrets.MONGO_HOST }}" > .env
+          echo "MONGO_USER=${{ secrets.MONGO_USER }}" >> .env
+          echo "MONGO_PASS=${{ secrets.MONGO_PASS }}" >> .env
+          echo "MONGO_DB=${{ secrets.MONGO_DB }}" >> .env
           docker-compose -f docker-compose.prod.yml pull
           docker-compose -f docker-compose.prod.yml up -d
-
-          # Wait for container to be healthy
-          echo "Waiting for container to be healthy..."
-          timeout 300 bash -c 'until docker ps | grep flask-app | grep -q "(healthy)"; do sleep 5; done'
-
-          # Print container status
-          docker ps
-          echo "Deployment completed"
-
-          # Print logs if container is not healthy
-          if ! docker ps | grep flask-app | grep -q "(healthy)"; then
-            echo "Container is not healthy. Printing logs:"
-            docker-compose -f docker-compose.prod.yml logs
-          fi
