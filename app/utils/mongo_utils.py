@@ -1,14 +1,31 @@
-from flask_pymongo import PyMongo
-from pymongo.errors import ConnectionError
+# app/utils/mongo_utils.py
+from pymongo import MongoClient
+from pymongo.errors import ConnectionFailure
+from flask import current_app
+import os
 
-mongo = PyMongo()
-
-def init_mongo(app):
-    mongo.init_app(app)
+def init_mongo():
     try:
-        # Verify connection
-        mongo.db.command('ping')
-        app.logger.info("MongoDB connected successfully!")
-    except ConnectionError as e:
-        app.logger.error(f"MongoDB connection failed: {str(e)}")
+        # Get MongoDB connection details from environment variables
+        mongo_host = os.getenv('MONGO_HOST', 'localhost')
+        mongo_user = os.getenv('MONGO_USER')
+        mongo_pass = os.getenv('MONGO_PASS')
+        mongo_db = os.getenv('MONGO_DB', 'flask_app')
+        
+        # Construct MongoDB URI
+        if mongo_user and mongo_pass:
+            mongo_uri = f"mongodb://{mongo_user}:{mongo_pass}@{mongo_host}/{mongo_db}"
+        else:
+            mongo_uri = f"mongodb://{mongo_host}/{mongo_db}"
+            
+        # Create MongoDB client
+        client = MongoClient(mongo_uri)
+        
+        # Test connection
+        client.admin.command('ping')
+        
+        return client[mongo_db]
+        
+    except ConnectionFailure as e:
+        current_app.logger.error(f"Could not connect to MongoDB: {e}")
         raise
