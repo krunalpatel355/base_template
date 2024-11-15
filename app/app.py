@@ -1,18 +1,22 @@
-from flask import Flask
-from app.config import Config
+# app/app.py
+from flask import Flask, jsonify
 from app.utils.mongo_utils import init_mongo
-from app.routes.main_routes import register_routes
 
 def create_app():
     app = Flask(__name__)
     
-    # Load config
-    app.config.from_object(Config())
-    
-    # Initialize MongoDB
-    init_mongo(app)
-    
-    # Register routes
-    register_routes(app)
-    
+    try:
+        app.db = init_mongo()
+    except Exception as e:
+        app.logger.error(f"Failed to initialize MongoDB: {e}")
+        app.db = None
+
+    @app.route('/health')
+    def health_check():
+        health_status = {
+            'status': 'healthy',
+            'mongodb_connected': app.db is not None
+        }
+        return jsonify(health_status)
+
     return app

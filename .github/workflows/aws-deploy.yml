@@ -49,25 +49,10 @@ jobs:
           mkdir -p ~/flask-app-deployment
           cd ~/flask-app-deployment
 
-          # Create docker-compose.prod.yml file
-          cat > docker-compose.prod.yml << EOL
-          version: '3.8'
+          # Pull the latest docker-compose file
+          aws s3 cp s3://${S3_BUCKET}/docker-compose.prod.yml ./docker-compose.prod.yml || true
 
-          services:
-            web:
-              image: ${ECR_REGISTRY}/flask-app:${IMAGE_TAG}
-              ports:
-                - "5000:5000"
-              environment:
-                - FLASK_ENV=production
-                - MONGO_HOST=${MONGO_HOST:-localhost}
-                - MONGO_USER=${MONGO_USER:-}
-                - MONGO_PASS=${MONGO_PASS:-}
-                - MONGO_DB=${MONGO_DB:-flask_app}
-              restart: always
-          EOL
-
-          # Set environment variables for docker-compose
+          # Set environment variables
           export MONGO_HOST="${{ secrets.MONGO_HOST }}"
           export MONGO_USER="${{ secrets.MONGO_USER }}"
           export MONGO_PASS="${{ secrets.MONGO_PASS }}"
@@ -76,10 +61,26 @@ jobs:
           # Login to ECR
           aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin ${ECR_REGISTRY}
 
-          # Deploy using docker-compose
+          # Stop and remove existing containers
           docker-compose -f docker-compose.prod.yml down || true
+
+          # Remove unused images
+          docker system prune -af
+
+          # Pull and start new containers
+          docker-compose -f docker-compose.prod.yml pull
           docker-compose -f docker-compose.prod.yml up -d
+
+          # Wait for container to be healthy
+          echo "Waiting for container to be healthy..."
+          timeout 300 bash -c 'until docker ps | grep flask-app | grep -q "(healthy)"; do sleep 5; done'
 
           # Print container status
           docker ps
           echo "Deployment completed"
+
+          # Print logs if container is not healthy
+          if ! docker ps | grep flask-app | grep -q "(healthy)"; then
+            echo "Container is not healthy. Printing logs:"
+            docker-compose -f docker-compose.prod.yml logs
+          fi

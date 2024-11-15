@@ -1,15 +1,27 @@
-# docker-compose.prod.yml (Production)
 version: '3.8'
 
 services:
   web:
-    build: .
+    image: ${ECR_REGISTRY}/flask-app:${IMAGE_TAG}
     ports:
       - "5000:5000"
     environment:
       - FLASK_ENV=production
-      - MONGO_HOST=${MONGO_HOST}
-      - MONGO_USER=${MONGO_USER}
-      - MONGO_PASS=${MONGO_PASS}
-      - MONGO_DB=${MONGO_DB}
-    restart: always
+      - FLASK_APP=wsgi.py
+      - MONGO_HOST=${MONGO_HOST:-localhost}
+      - MONGO_USER=${MONGO_USER:-}
+      - MONGO_PASS=${MONGO_PASS:-}
+      - MONGO_DB=${MONGO_DB:-flask_app}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
