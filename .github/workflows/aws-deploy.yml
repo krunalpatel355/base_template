@@ -1,4 +1,3 @@
-
 name: Deploy to AWS EC2
 
 on:
@@ -36,16 +35,51 @@ jobs:
 
     - name: Deploy to EC2
       uses: appleboy/ssh-action@master
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        IMAGE_TAG: ${{ github.sha }}
       with:
         host: ${{ secrets.EC2_HOST }}
         username: ${{ secrets.EC2_USERNAME }}
         key: ${{ secrets.EC2_SSH_KEY }}
+        port: 22
+        envs: ECR_REGISTRY,IMAGE_TAG
         script: |
-          aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin ${{ steps.login-ecr.outputs.registry }}
-          docker pull ${{ steps.login-ecr.outputs.registry }}/flask-app:${{ github.sha }}
-          docker-compose -f docker-compose.prod.yml down
-          export MONGO_HOST=${{ secrets.MONGO_HOST }}
-          export MONGO_USER=${{ secrets.MONGO_USER }}
-          export MONGO_PASS=${{ secrets.MONGO_PASS }}
-          export MONGO_DB=${{ secrets.MONGO_DB }}
+          # Create deployment directory if it doesn't exist
+          mkdir -p ~/flask-app-deployment
+          cd ~/flask-app-deployment
+
+          # Create docker-compose.prod.yml file
+          cat > docker-compose.prod.yml << EOL
+          version: '3.8'
+
+          services:
+            web:
+              image: ${ECR_REGISTRY}/flask-app:${IMAGE_TAG}
+              ports:
+                - "5000:5000"
+              environment:
+                - FLASK_ENV=production
+                - MONGO_HOST=${MONGO_HOST:-localhost}
+                - MONGO_USER=${MONGO_USER:-}
+                - MONGO_PASS=${MONGO_PASS:-}
+                - MONGO_DB=${MONGO_DB:-flask_app}
+              restart: always
+          EOL
+
+          # Set environment variables for docker-compose
+          export MONGO_HOST="${{ secrets.MONGO_HOST }}"
+          export MONGO_USER="${{ secrets.MONGO_USER }}"
+          export MONGO_PASS="${{ secrets.MONGO_PASS }}"
+          export MONGO_DB="${{ secrets.MONGO_DB }}"
+
+          # Login to ECR
+          aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin ${ECR_REGISTRY}
+
+          # Deploy using docker-compose
+          docker-compose -f docker-compose.prod.yml down || true
           docker-compose -f docker-compose.prod.yml up -d
+
+          # Print container status
+          docker ps
+          echo "Deployment completed"
